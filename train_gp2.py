@@ -13,6 +13,24 @@ class GPTConfig:
     n_head: int = 6
     n_embd: int = 384
     
+class CausalSelfAttention(nn.Module):
+    
+    def __init__(self, config) -> None:
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        # regularization
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        # not really a 'bias', more of a mask, but following the OpenAI/HF naming though
+        self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
+        
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embdding dimensionality (n_embd)
+        qkv = self.c_attn(x)
 class MLP(nn.Module):
     
     def __init__(self, config):
