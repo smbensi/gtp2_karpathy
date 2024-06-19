@@ -1,3 +1,5 @@
+import math
+
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
@@ -7,11 +9,11 @@ from torch.nn import functional as F
 
 @dataclass
 class GPTConfig:
-    block_size: int = 256
-    vocab_size: int = 65
-    n_layer: int = 6
-    n_head: int = 6
-    n_embd: int = 384
+    block_size: int = 1024 # max sequence length
+    vocab_size: int = 50257 # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 |<endoftxt>| token 
+    n_layer: int = 12 # number of layers
+    n_head: int = 12 # number of heads
+    n_embd: int = 768 # embedding dimension 
 
 
 class CausalSelfAttention(nn.Module):
@@ -35,11 +37,18 @@ class CausalSelfAttention(nn.Module):
         # e.g. in GPT-2 (124M), n_head=12, hs=64, so nh*hs=C=768 channels in the Transformer
         qkv = self.c_attn(x)
         q, k, v = qkv.split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs) 
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        
+        # attention materializes the large (T,T) matrix for all the queries and keys
+        att = (q @ k.transpose(-2, -1)) * (1.0/math.sqrt(k.size(-1)))
+        att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float("-inf")) # auto-regressive mask that make sure that the tokens only attend the tokens before them and never to tokens in the future 
+        att = F.softmax(att, dim=-1) # normalizes the attention
+        y = att @ v # way to do a weighted sum of the values of the tokens we find interesting at every single token 
+        
+        # y = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side. It's the concatenate operation 
         # output projection
         y = self.c_proj(y)
         return y
@@ -89,4 +98,11 @@ class GPT(nn.Module):
         
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-
+    # load the weights from hugging face  
+    @classmethod
+    def from_pretrained(cls, model_type):
+        """Loads pretrained GPT-2 model weights from hugging face"""
+        assert model_type in {'gpt2','gpt2-medium','gpt2-large', 'gpt2-xl'}
+        from transformers import GPT2LMHeadModel
+        print("loading weights from pretrained gpt: %s" % model_type)
+        
