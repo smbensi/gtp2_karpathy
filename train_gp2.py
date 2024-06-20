@@ -29,6 +29,8 @@ class CausalSelfAttention(nn.Module):
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
+        
+        self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size)).view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
@@ -98,14 +100,14 @@ class GPT(nn.Module):
         
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         
-    def forward(self, idx):
-        # idx is of shape (B, T)
+    def forward(self, idx): # idsx is our tokens
+        # idx is of shape (B, T) we have B independent sequences stacked up in a batch
         B, T = idx.size()
         assert T <= self.config.block_size, f"Cannot forward sequence of length {T}, block size is only {self.config.block_size}"
         # forward the token and position embeddings
-        pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
+        pos = torch.arange(0, T, dtype=torch.long, device=idx.device) # shape (T)
         pos_emb = self.transformer.wpe(pos) # position embedding of shape (T, n_emb)
-        tok_emb = self.transformer.wte(pos) # token embedding of shape (B, T, n_emb)
+        tok_emb = self.transformer.wte(idx) # token embedding of shape (B, T, n_emb)
         x = tok_emb + pos_emb
         # forward the blocks of the transformer
         for block in self.transformer.h:
@@ -168,5 +170,44 @@ class GPT(nn.Module):
     
 
 #--------------------------------------------------------------------------------
+num_return_sequences = 5
+max_length = 30
+
 model = GPT.from_pretrained("gpt2")
-print("I didn't crash yay !")
+model.eval() # good practice when you'll use only use it and not training it
+model.to('cuda') # moving the model to GPU
+
+# prefix tokens
+import tiktoken
+enc = tiktoken.get_encoding('gpt2')
+tokens = enc.encode("Hello, I'm a language model,")
+tokens = torch.tensor(tokens, dtype=torch.long) # The token count with this tokenizer is (8,)
+tokens = tokens.unsqueeze(0).repeat(num_return_sequences,1) #(5,8)
+x = tokens.to('cuda')
+
+# generate! right now x is (B, T) where B = 5, T = 8
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+while x.size(1) < max_length:
+    # forward the model to get the logits
+    with torch.no_grad():  # telling PyTorch that we are not going to call .backward() on the following so it doesn't have to cache all the intermediate tensors
+        logits = model(x) # (B, T, vocab_size)
+        # Take the logits at the last position
+        logits = logits[:,-1,:]
+        # get the probabilities
+        probs = F.softmax(logits, dim=-1)
+        # do top-k sampling of 50 (hugging face pipeline default)
+        # topk_probs here becomes (5,50), topk_indices is (5,50)
+        topk_probs, topk_indices = torch.topk(probs, 50, dim=-1) # we clamp to 0 all the rest after the 50th probability and renormalize
+        # select a token from the top-k probabilities
+        ix = torch.multinomial(topk_probs,1) # (B, 1)
+        # gather the corresponding correspondences
+        xcol = torch.gather(topk_indices, -1, ix) # (B,1)
+        # append to the sequence
+        x = torch.cat((x, xcol), dim=1)
+        
+# print the generated text
+for i in range(num_return_sequences):
+    tokens = x[i,:max_length].tolist()
+    decoded = enc.decode(tokens)
+    print(">", decoded)
