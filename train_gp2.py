@@ -100,7 +100,7 @@ class GPT(nn.Module):
         
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         
-    def forward(self, idx): # idsx is our tokens
+    def forward(self, idx, targets=None): # idsx is our tokens
         # idx is of shape (B, T) we have B independent sequences stacked up in a batch
         B, T = idx.size()
         assert T <= self.config.block_size, f"Cannot forward sequence of length {T}, block size is only {self.config.block_size}"
@@ -115,7 +115,10 @@ class GPT(nn.Module):
         # forward the final layernorm and the classifier
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x) # (B, T, vocab_size)
-        return logits
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        return logits, loss
         
         
     # load the weights from hugging face  
@@ -170,20 +173,48 @@ class GPT(nn.Module):
     
 
 #--------------------------------------------------------------------------------
+
+# attempt to autodetect the device
+device = "cpu"
+if torch.cuda.is_available():
+    device = 'cuda'
+elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available(): # it's the backend for Apple Silicon
+    device = 'mps'
+print(f'using device {device}')
+device = "cpu"
+
 num_return_sequences = 5
 max_length = 30
 
-model = GPT.from_pretrained("gpt2")
-model.eval() # good practice when you'll use only use it and not training it
-model.to('cuda') # moving the model to GPU
+
 
 # prefix tokens
 import tiktoken
 enc = tiktoken.get_encoding('gpt2')
-tokens = enc.encode("Hello, I'm a language model,")
-tokens = torch.tensor(tokens, dtype=torch.long) # The token count with this tokenizer is (8,)
-tokens = tokens.unsqueeze(0).repeat(num_return_sequences,1) #(5,8)
-x = tokens.to('cuda')
+# tokens = enc.encode("Hello, I'm a language model,")
+# tokens = torch.tensor(tokens, dtype=torch.long) # The token count with this tokenizer is (8,)
+# tokens = tokens.unsqueeze(0).repeat(num_return_sequences,1) #(5,8)
+# x = tokens.to(device)
+with open('input.txt','r') as f:
+    text = f.read()
+text = text[:1000]
+tokens = enc.encode(text)
+B, T = 4, 32
+buf = torch.tensor(tokens[:B*T +1])
+x = buf[:-1].view(B, T)
+y = buf[1:].view(B, T)
+
+
+
+# model = GPT.from_pretrained("gpt2")
+model = GPT(GPTConfig())
+model.eval() # good practice when you'll use only use it and not training it
+model.to(device) # moving the model to GPU
+
+logits, loss = model(x, y)
+
+print(loss)
+import sys; sys.exit(0)
 
 # generate! right now x is (B, T) where B = 5, T = 8
 torch.manual_seed(42)
