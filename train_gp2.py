@@ -181,7 +181,6 @@ if torch.cuda.is_available():
 elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available(): # it's the backend for Apple Silicon
     device = 'mps'
 print(f'using device {device}')
-device = "cpu"
 
 num_return_sequences = 5
 max_length = 30
@@ -201,6 +200,7 @@ text = text[:1000]
 tokens = enc.encode(text)
 B, T = 4, 32
 buf = torch.tensor(tokens[:B*T +1])
+buf = buf.to(device)
 x = buf[:-1].view(B, T)
 y = buf[1:].view(B, T)
 
@@ -211,7 +211,14 @@ model = GPT(GPTConfig())
 model.eval() # good practice when you'll use only use it and not training it
 model.to(device) # moving the model to GPU
 
-logits, loss = model(x, y)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+# logits, loss = model(x, y)
+for i in range(50):
+    optimizer.zero_grad()
+    logits, loss = model(x,y)
+    loss.backward()
+    optimizer.step()
+    print(f"step {i}, loss: {loss.item()}")
 
 print(loss)
 import sys; sys.exit(0)
