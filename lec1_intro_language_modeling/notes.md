@@ -21,3 +21,5 @@ equivalent to miniminzing the average negative log likelihood
 - `torch.sum` provides `dim` and `keepdim` . The `dim` will sum up over this dimension if dim=0 the 0 dimension will disappear (`torch.squeeze()`) or will be 1 if keepdim=True
 - `Broadcasting semantics` in torch 
 - In-place operation is more efficient because it does not have to create new memory
+- 2 ways of creating a tensor/Tensor torch.tensor infers the dtype automatically while torch.Tensor returns a torch.FloatTensor
+- Torch has a ONE_HOT function for one hot encoding
