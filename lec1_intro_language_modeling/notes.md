@@ -11,6 +11,8 @@ equivalent to maximizing the log likelihood (because log is monotonic)
 equivalent to miniminzing the negative log likelihood
 equivalent to miniminzing the average negative log likelihood
 
+- **model smoothing** we add some fake account 
+
 
 ## Notes on python
 
