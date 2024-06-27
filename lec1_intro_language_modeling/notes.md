@@ -13,6 +13,7 @@ equivalent to miniminzing the average negative log likelihood
 
 - **model smoothing** we add some fake account 
 - NLL (negative log likelihood) is used for classification while MSE is used in regression
+- can add an elemnt of regularization to the loss function (i.e. (W**2).mean()) . It permits to not have to big weights
 
 
 ## Notes on python
