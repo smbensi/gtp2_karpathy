@@ -12,6 +12,7 @@ equivalent to miniminzing the negative log likelihood
 equivalent to miniminzing the average negative log likelihood
 
 - **model smoothing** we add some fake account 
+- NLL (negative log likelihood) is used for classification while MSE is used in regression
 
 
 ## Notes on python
@@ -23,3 +24,5 @@ equivalent to miniminzing the average negative log likelihood
 - In-place operation is more efficient because it does not have to create new memory
 - 2 ways of creating a tensor/Tensor torch.tensor infers the dtype automatically while torch.Tensor returns a torch.FloatTensor
 - Torch has a ONE_HOT function for one hot encoding
+- In PyTorch we need to notice that we need the gradient by initializing with `requires_grad=True`
+  
