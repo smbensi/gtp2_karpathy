@@ -1,0 +1,3 @@
+- we want the logits to be roughly 0 at the beggining
+- at the begininning we want all the logits to have roughly a uniform distribution
+- problem with saturated tanh
