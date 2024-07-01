@@ -9,4 +9,5 @@
 
 - We have the hidden state roughly gaussian at leat at initialization. So BN noramlizes the hidden state to gaussian
 - mean over all the elements in the batch
-- we aare coupling between the examples in the batch
+- we aare coupling between the examples in the batch. We can think that as a regularizer
+- it stabilizes training
